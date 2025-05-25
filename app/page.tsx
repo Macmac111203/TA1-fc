@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table"
 import {
   AlertDialog,
@@ -55,27 +57,24 @@ const columns: ColumnDef<Book>[] = [
   },
   {
     id: "actions",
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
       const book = row.original
-      return <Actions book={book} />
+      const { books, setBooks } = (table.options.meta as any) || {}
+      return <Actions book={book} books={books} setBooks={setBooks} />
     },
   },
 ]
 
-function Actions({ book }: { book: Book }) {
+function Actions({
+  book,
+  books,
+  setBooks,
+}: { book: Book; books: Book[]; setBooks: React.Dispatch<React.SetStateAction<Book[]>> }) {
   const [open, setOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
-  const [books, setBooks] = useState<Book[]>([])
-
-  useEffect(() => {
-    const storedBooks = localStorage.getItem("books")
-    if (storedBooks) {
-      setBooks(JSON.parse(storedBooks))
-    }
-  }, [])
 
   const deleteBook = () => {
-    const updatedBooks = books.filter((b) => b.title !== book.title)
+    const updatedBooks = books.filter((b) => b.title !== book.title && b.author !== book.author)
     setBooks(updatedBooks)
     localStorage.setItem("books", JSON.stringify(updatedBooks))
     setOpen(false)
@@ -115,7 +114,7 @@ function Actions({ book }: { book: Book }) {
             <SheetTitle>Edit book</SheetTitle>
             <SheetDescription>Make changes to your book here. Click save when you're done.</SheetDescription>
           </SheetHeader>
-          <EditBookForm book={book} setOpen={setEditOpen} setBooks={setBooks} />
+          <EditBookForm book={book} setOpen={setEditOpen} books={books} setBooks={setBooks} />
         </SheetContent>
       </Sheet>
     </>
@@ -125,11 +124,13 @@ function Actions({ book }: { book: Book }) {
 function EditBookForm({
   book,
   setOpen,
+  books,
   setBooks,
 }: {
   book: Book
   setOpen: (open: boolean) => void
-  setBooks: (books: Book[]) => void
+  books: Book[]
+  setBooks: React.Dispatch<React.SetStateAction<Book[]>>
 }) {
   const form = useForm<z.infer<typeof bookSchema>>({
     resolver: zodResolver(bookSchema),
@@ -137,11 +138,9 @@ function EditBookForm({
   })
 
   function onSubmit(values: z.infer<typeof bookSchema>) {
-    setBooks((prev) => {
-      const updatedBooks = prev.map((b) => (b.title === book.title ? values : b))
-      localStorage.setItem("books", JSON.stringify(updatedBooks))
-      return updatedBooks
-    })
+    const updatedBooks = books.map((b) => (b.title === book.title && b.author === book.author ? values : b))
+    setBooks(updatedBooks)
+    localStorage.setItem("books", JSON.stringify(updatedBooks))
     toast("Book updated.")
     setOpen(false)
   }
@@ -209,7 +208,10 @@ function EditBookForm({
   )
 }
 
-function AddBookForm({ setOpen, setBooks }: { setOpen: (open: boolean) => void; setBooks: (books: Book[]) => void }) {
+function AddBookForm({
+  setOpen,
+  setBooks,
+}: { setOpen: (open: boolean) => void; setBooks: React.Dispatch<React.SetStateAction<Book[]>> }) {
   const form = useForm<z.infer<typeof bookSchema>>({
     resolver: zodResolver(bookSchema),
     defaultValues: {
@@ -310,6 +312,10 @@ export default function IndexPage() {
     data: books,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    meta: {
+      books,
+      setBooks,
+    },
   })
 
   return (
